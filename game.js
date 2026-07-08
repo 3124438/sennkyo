@@ -10,7 +10,10 @@ let gameState = {
     sns_influence: 0,
     school_cooperation: 0,
     currentTrend: null,
-    autoInterestBuff: 0
+    autoInterestBuff: 0,
+    // スプシから読み込む設定値
+    fixedCost: 500000,       // デフォルト値（スプシにない場合のバックアップ）
+    donationMultiplier: 5000 // デフォルト値
 };
 
 window.onload = async function() {
@@ -46,13 +49,27 @@ function initGame() {
     gameState.actionCount = 3;
     
     // スプシの日本語キー構造から初期値を安全に読み込み
-    gameState.funds = 10000000; // デフォルト値
+    gameState.funds = 10000000; 
     gameState.voting_rate = 35;
     gameState.political_interest = 30;
     gameState.support_rate = 50;
     gameState.sns_influence = 20;
     gameState.school_cooperation = 10;
     gameState.autoInterestBuff = 0;
+
+    // 【新規】設定シートから固定費と寄付金倍率を取得（日本語キーに対応）
+    // JSONのsettingオブジェクト内から、対応する値を探します
+    if (masterData.setting) {
+        // もしスプシ側で「固定費」「寄付金倍率」という日本語行がある場合、そこから数値を引っ張るための処理
+        // 安全策として、スプシにデータがまだ無くてもエラーにならないよう、数値に変換できる場合のみ上書きします
+        const s = masterData.setting;
+        if (s["固定費"]) gameState.fixedCost = Number(s["固定費"]) || 500000;
+        if (s["寄付金倍率"]) gameState.donationMultiplier = Number(s["寄付金倍率"]) || 5000;
+        
+        // ※もしJSON側が "fixed_cost" や "donation_multiplier" というキーで入ってきた場合もカバー
+        if (s["fixed_cost"]) gameState.fixedCost = Number(s["fixed_cost"]);
+        if (s["donation_multiplier"]) gameState.donationMultiplier = Number(s["donation_multiplier"]);
+    }
 
     logMessage("🎮 スプレッドシートのデータでゲームを開始しました！");
     startTurn();
@@ -62,12 +79,14 @@ function startTurn() {
     gameState.actionCount = 3;
     document.getElementById('end-turn-btn').disabled = true;
 
-    let income = Math.floor(gameState.support_rate * 5000);
-    let fixedCost = 500000;
+    // 【新規】スプシで指定した「値（倍率） × 支持率」で寄付金を算出！
+    let income = Math.floor(gameState.support_rate * gameState.donationMultiplier);
+    let fixedCost = gameState.fixedCost; // スプシから取得した固定費
+    
     gameState.funds += (income - fixedCost);
     logMessage(`💰 今月の収支: 寄付金 +${income.toLocaleString()}円 / 固定費 -${fixedCost.toLocaleString()}円`);
 
-    // トレンド決定（英語キー説明用のデータ行は除外）
+    // トレンド決定
     const validTrends = masterData.trend_master.filter(t => t["トレンドID"] !== "trend_id");
     if (validTrends.length > 0) {
         const randomIndex = Math.floor(Math.random() * validTrends.length);
@@ -86,7 +105,7 @@ function createActionButtons() {
 
     if (!masterData.action_master) return;
 
-    // 「行動ID」が "action_id" になっている設定行を自動でスキップ！
+    // 行動IDが「action_id」の設定行を自動スキップ（何個増えてもここですべて綺麗に処理されます！）
     const actualActions = masterData.action_master.filter(act => act["行動ID"] !== "action_id");
 
     actualActions.forEach(act => {
@@ -167,10 +186,7 @@ function handleRandomEvent() {
     const validEvents = masterData.event_master.filter(ev => ev["イベントID"] !== "event_id");
     if (validEvents.length === 0) return;
 
-    // 今回はシンプルに最初のイベントを発動
     let selectedEvent = validEvents[0];
-    
-    // 条件チェック（簡易版）
     if (gameState.support_rate >= 55) {
         gameState.funds += (Number(selectedEvent["資金影響"]) || 0);
         gameState.voting_rate += (Number(selectedEvent["投票率影響"]) || 0);
