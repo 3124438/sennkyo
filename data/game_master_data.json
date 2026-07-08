@@ -1,0 +1,156 @@
+{
+  "setting": {
+    "init_voting_rate": 35,
+    "init_political_interest": 30,
+    "init_support_rate": 50,
+    "init_sns_influence": 20,
+    "init_school_cooperation": 10,
+    "init_funds": 10000000
+  },
+  "action_master": [
+    {
+      "action_id": 1,
+      "action_name": "SNSキャンペーン投稿",
+      "description": "選挙啓発コンテンツをSNSで発信する",
+      "cost_money": 50000,
+      "req_sns": 0,
+      "req_school": 0,
+      "effect_voting": 0.5,
+      "effect_interest": 1,
+      "effect_support": 0.5,
+      "effect_sns": 3,
+      "effect_school": 0,
+      "action_category": "SNS"
+    },
+    {
+      "action_id": 2,
+      "action_name": "高校で模擬選挙を実施",
+      "description": "提携校で模擬選挙イベントを開催する",
+      "cost_money": 200000,
+      "req_sns": 0,
+      "req_school": 5,
+      "effect_voting": 1.5,
+      "effect_interest": 2,
+      "effect_support": 1,
+      "effect_sns": 0,
+      "effect_school": 3,
+      "action_category": "SCHOOL"
+    },
+    {
+      "action_id": 3,
+      "action_name": "地域イベントでブース出展",
+      "description": "商店街や地域祭りで啓発ブースを出す",
+      "cost_money": 150000,
+      "req_sns": 0,
+      "req_school": 0,
+      "effect_voting": 1,
+      "effect_interest": 1,
+      "effect_support": 2,
+      "effect_sns": 1,
+      "effect_school": 1,
+      "action_category": "LOCAL"
+    },
+    {
+      "action_id": 4,
+      "action_name": "企業協賛を獲得",
+      "description": "地元企業から活動資金の協賛を得る",
+      "cost_money": -500000,
+      "req_sns": 10,
+      "req_school": 0,
+      "effect_voting": 0,
+      "effect_interest": 0,
+      "effect_support": -1,
+      "effect_sns": 0,
+      "effect_school": 0,
+      "action_category": "FUNDING"
+    }
+  ],
+  "trend_master": [
+    {
+      "trend_id": 1,
+      "trend_name": "若者インフルエンサーの政治発言が話題",
+      "description": "SNS上で政治的発言をするインフルエンサーが増加中",
+      "buff_target": "SNS",
+      "buff_rate": 1.5,
+      "connected_election_id": 1
+    },
+    {
+      "trend_id": 2,
+      "trend_name": "主権者教育の授業が全国で拡大",
+      "description": "学校での主権者教育が注目されている",
+      "buff_target": "SCHOOL",
+      "buff_rate": 1.5,
+      "connected_election_id": 1
+    },
+    {
+      "trend_id": 3,
+      "trend_name": "地方創生ムーブメント",
+      "description": "地域コミュニティの活性化が話題に",
+      "buff_target": "LOCAL",
+      "buff_rate": 1.3,
+      "connected_election_id": 1
+    }
+  ],
+  "election_master": [
+    {
+      "election_id": 1,
+      "threshold_voting": 45,
+      "policy_success_title": "若者政策推進法 可決",
+      "policy_success_text": "若者の声を反映した政策が推進されることになった。",
+      "buff_interest_auto": 0.5,
+      "policy_fail_title": "若者政策 見送り",
+      "policy_fail_text": "投票率不足により、若者向け政策の優先度が下げられた。",
+      "penalty_support": 5
+    }
+  ],
+  "event_master": [
+    {
+      "event_id": 1,
+      "event_name": "SNSでバズる",
+      "event_text": "団体の投稿が思わぬ形で拡散され話題になった。",
+      "weight": 3,
+      "condition_param": "sns_influence",
+      "condition_value": 15,
+      "eff_money": 0,
+      "eff_voting": 0,
+      "eff_interest": 1,
+      "eff_support": 2
+    },
+    {
+      "event_id": 2,
+      "event_name": "炎上騒動",
+      "event_text": "活動内容が誤解を招き、批判が集まった。",
+      "weight": 2,
+      "condition_param": "",
+      "condition_value": 0,
+      "eff_money": -100000,
+      "eff_voting": 0,
+      "eff_interest": 0,
+      "eff_support": -3
+    },
+    {
+      "event_id": 3,
+      "event_name": "メディア特集",
+      "event_text": "地方新聞に活動が取り上げられた。",
+      "weight": 2,
+      "condition_param": "school_cooperation",
+      "condition_value": 15,
+      "eff_money": 50000,
+      "eff_voting": 1,
+      "eff_interest": 1,
+      "eff_support": 1
+    },
+    {
+      "event_id": 4,
+      "event_name": "特に何もない月",
+      "event_text": "静かな一ヶ月だった。",
+      "weight": 5,
+      "condition_param": "",
+      "condition_value": 0,
+      "eff_money": 0,
+      "eff_voting": 0,
+      "eff_interest": 0,
+      "eff_support": 0
+    }
+  ]
+}
