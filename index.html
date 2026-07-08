@@ -1,212 +1,81 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vote Rise 〜若者の一票が未来を変える〜</title>
-<style>
-  :root {
-    --bg: #0f1220;
-    --panel: #1a1f35;
-    --accent: #4f8cff;
-    --accent2: #ff6b6b;
-    --good: #4caf50;
-    --text: #eef1fb;
-    --muted: #9aa3c7;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    padding: 16px;
-  }
-  h1 { font-size: 1.3rem; margin: 0 0 12px; }
-  .layout {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-  @media (min-width: 800px) {
-    .layout { grid-template-columns: 320px 1fr; }
-  }
-  .panel {
-    background: var(--panel);
-    border-radius: 12px;
-    padding: 16px;
-  }
-  .stat-row {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 8px;
-    font-size: 0.95rem;
-  }
-  .stat-row span:first-child { color: var(--muted); }
-  .bar-bg {
-    background: #2a3050;
-    border-radius: 6px;
-    height: 8px;
-    overflow: hidden;
-    margin-bottom: 12px;
-  }
-  .bar-fill { height: 100%; background: var(--accent); }
-  .trend-box {
-    background: #232946;
-    border-left: 4px solid var(--accent2);
-    padding: 10px 12px;
-    border-radius: 8px;
-    margin-bottom: 12px;
-    font-size: 0.9rem;
-  }
-  .action-list { display: flex; flex-direction: column; gap: 8px; }
-  .action-btn {
-    background: #232946;
-    border: 1px solid #333a5c;
-    border-radius: 10px;
-    padding: 10px 12px;
-    color: var(--text);
-    text-align: left;
-    cursor: pointer;
-  }
-  .action-btn:hover:not(:disabled) { border-color: var(--accent); }
-  .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .action-name { font-weight: bold; }
-  .action-desc { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
-  .action-buffed { color: #ffd166; font-size: 0.78rem; }
-  #end-turn-btn {
-    margin-top: 12px;
-    width: 100%;
-    background: var(--accent);
-    border: none;
-    color: white;
-    padding: 12px;
-    border-radius: 10px;
-    font-size: 1rem;
-    cursor: pointer;
-  }
-  #end-turn-btn:disabled { background: #333a5c; cursor: not-allowed; }
-  #log-box {
-    height: 260px;
-    overflow-y: auto;
-    background: #10142a;
-    border-radius: 8px;
-    padding: 10px;
-    font-size: 0.82rem;
-    line-height: 1.5;
-  }
-  #log-box div { margin-bottom: 4px; }
-  .status-banner {
-    padding: 14px;
-    border-radius: 10px;
-    text-align: center;
-    font-weight: bold;
-    margin-bottom: 12px;
-  }
-  .status-banner.clear { background: rgba(76,175,80,0.2); border: 1px solid var(--good); }
-  .status-banner.over { background: rgba(255,107,107,0.2); border: 1px solid var(--accent2); }
-  .turn-label { font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vote Rise 〜若者の一票が未来を変える〜</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f4f7f6; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 5px;}
+        .subtitle { text-align: center; color: #7f8c8d; font-size: 14px; margin-bottom: 25px; }
+        .status-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; background: #eef2f3; padding: 15px; border-radius: 6px; }
+        .status-item { padding: 10px; background: white; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); text-align: center; }
+        .status-label { font-size: 12px; color: #7f8c8d; font-weight: bold; }
+        .status-value { font-size: 16px; font-weight: bold; color: #2980b9; margin-top: 5px; }
+        .trend-box { background: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+        .trend-title { font-weight: bold; color: #856404; }
+        .action-section { margin-bottom: 20px; }
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .action-btn { padding: 15px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; text-align: left; font-size: 14px; transition: background 0.2s; }
+        .action-btn:hover { background: #2980b9; }
+        .action-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .action-info { font-size: 11px; color: #eef2f3; margin-top: 5px; }
+        .log-section { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 6px; height: 160px; overflow-y: auto; font-family: monospace; font-size: 12px; margin-bottom: 20px; }
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #34495e; padding-bottom: 5px; }
+        .control-panel { text-align: center; }
+        .next-btn { padding: 12px 30px; font-size: 16px; background: #2ecc71; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .next-btn:hover { background: #27ae60; }
+        .next-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
+        .modal-content { background: white; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .modal-title { font-size: 20px; font-weight: bold; margin-bottom: 15px; color: #e67e22; }
+        .modal-body { font-size: 14px; line-height: 1.6; margin-bottom: 20px; text-align: left; background: #f9f9f9; padding: 15px; border-radius: 4px; }
+        .modal-btn { padding: 10px 25px; background: #e67e22; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    </style>
 </head>
 <body>
-  <h1>🗳️ Vote Rise 〜若者の一票が未来を変える〜</h1>
-  <div class="layout">
-    <div class="panel" id="stats-panel">
-      <div class="turn-label" id="turn-label">Turn -- / 60</div>
-      <div id="banner-area"></div>
-      <div id="stat-list"></div>
-      <div class="trend-box" id="trend-box">トレンド読み込み中...</div>
+    <div class="container">
+        <h1>Vote Rise</h1>
+        <div class="subtitle">〜若者の一票が未来を変える〜 (試作プロトタイプ)</div>
+        
+        <div class="status-board">
+            <div class="status-item"><div class="status-label">経過ターン</div><div id="stat-turn" class="status-value">1 / 60</div></div>
+            <div class="status-item"><div class="status-label">今月の行動残り</div><div id="stat-actions" class="status-value">3 回</div></div>
+            <div class="status-item"><div class="status-label">団体資金</div><div id="stat-funds" class="status-value">0円</div></div>
+            <div class="status-item"><div class="status-label">若者投票率</div><div id="stat-voting" class="status-value">0%</div></div>
+            <div class="status-item"><div class="status-label">政治関心度</div><div id="stat-interest" class="status-value">0</div></div>
+            <div class="status-item"><div class="status-label">活動支持率</div><div id="stat-support" class="status-value">0</div></div>
+            <div class="status-item"><div class="status-label">SNS影響力</div><div id="stat-sns" class="status-value">0</div></div>
+            <div class="status-item"><div class="status-label">学校連携度</div><div id="stat-school" class="status-value">0</div></div>
+        </div>
+
+        <div class="trend-box">
+            <div class="trend-title">🔥 今月のトレンド</div>
+            <div id="trend-desc" style="margin-top: 5px;">読み込み中...</div>
+        </div>
+
+        <div class="action-section">
+            <h3>コマンド選択（今月あと <span id="action-count-text">3</span> 回実行可能）</h3>
+            <div id="action-grid" class="action-grid"></div>
+        </div>
+
+        <h3>活動・ハプニング記録ログ</h3>
+        <div id="log-box" class="log-section"></div>
+
+        <div class="control-panel">
+            <button id="end-turn-btn" class="next-btn" onclick="endTurn()" disabled>行動を終了して次の月へ</button>
+        </div>
     </div>
-    <div class="panel">
-      <div class="action-list" id="action-list"></div>
-      <button id="end-turn-btn">ターンを終了する</button>
-      <h3 style="margin-top:16px;">ログ</h3>
-      <div id="log-box"></div>
+
+    <div id="game-modal" class="modal">
+        <div class="modal-content">
+            <div id="modal-title" class="modal-title">イベント発生</div>
+            <div id="modal-body" class="modal-body">本文</div>
+            <button class="modal-btn" onclick="closeModal()">確認しました</button>
+        </div>
     </div>
-  </div>
 
-  <script src="./game.js"></script>
-  <script>
-    const statNames = {
-      funds: "資金（円）",
-      voting_rate: "若者投票率（%）",
-      political_interest: "政治関心度",
-      support_rate: "活動支持率",
-      sns_influence: "SNS影響力",
-      school_cooperation: "学校連携度"
-    };
-
-    window.onGameStateUpdated = function (state, log, master) {
-      document.getElementById("turn-label").textContent = `Turn ${state.turn} / 60 （残り行動: ${state.actionsLeft}回）`;
-
-      // バナー
-      const bannerArea = document.getElementById("banner-area");
-      bannerArea.innerHTML = "";
-      if (state.isCleared) {
-        bannerArea.innerHTML = `<div class="status-banner clear">🎉 クリア！5年間の活動お疲れ様でした。</div>`;
-      } else if (state.isGameOver) {
-        bannerArea.innerHTML = `<div class="status-banner over">💀 ゲームオーバー：${state.gameOverReason}</div>`;
-      }
-
-      // ステータス
-      const statList = document.getElementById("stat-list");
-      statList.innerHTML = "";
-      Object.keys(statNames).forEach(key => {
-        const val = state[key];
-        const display = key === "funds" ? Math.round(val).toLocaleString() : val.toFixed(1);
-        const pct = key === "funds" ? null : Math.max(0, Math.min(100, val));
-        statList.innerHTML += `
-          <div class="stat-row"><span>${statNames[key]}</span><span>${display}</span></div>
-          ${pct !== null ? `<div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>` : `<div style="margin-bottom:12px;"></div>`}
-        `;
-      });
-
-      // トレンド
-      const trendBox = document.getElementById("trend-box");
-      if (state.currentTrend) {
-        trendBox.innerHTML = `📈 今月のトレンド: <strong>${state.currentTrend.trend_name}</strong><br>
-          <span style="color:var(--muted);font-size:0.8rem;">${state.currentTrend.description || ""}（バフ対象: ${state.currentTrend.buff_target} ×${state.currentTrend.buff_rate}）</span>`;
-      } else {
-        trendBox.textContent = "トレンドなし";
-      }
-
-      // 行動リスト
-      const actionList = document.getElementById("action-list");
-      actionList.innerHTML = "";
-      getAvailableActions().forEach(action => {
-        const buffed = state.currentTrend && state.currentTrend.buff_target === action.action_category;
-        const btn = document.createElement("button");
-        btn.className = "action-btn";
-        btn.disabled = !action._check.ok || state.isGameOver || state.isCleared;
-        btn.innerHTML = `
-          <div class="action-name">${action.action_name} ${buffed ? `<span class="action-buffed">(トレンド強化中)</span>` : ""}</div>
-          <div class="action-desc">${action.description || ""}｜コスト:${(action.cost_money||0).toLocaleString()}円</div>
-          ${!action._check.ok ? `<div class="action-desc" style="color:var(--accent2);">${action._check.reason}</div>` : ""}
-        `;
-        btn.onclick = () => {
-          const result = executeAction(action.action_id);
-          if (!result.ok) alert(result.reason);
-        };
-        actionList.appendChild(btn);
-      });
-
-      // ターン終了ボタン
-      const endBtn = document.getElementById("end-turn-btn");
-      endBtn.disabled = state.isGameOver || state.isCleared;
-      endBtn.onclick = () => endTurn();
-
-      // ログ
-      const logBox = document.getElementById("log-box");
-      logBox.innerHTML = log.map(l => `<div>${l}</div>`).join("");
-      logBox.scrollTop = logBox.scrollHeight;
-    };
-
-    initGame().catch(err => {
-      alert("データの読み込みに失敗しました: " + err.message);
-      console.error(err);
-    });
-  </script>
+    <script src="game.js"></script>
 </body>
 </html>
