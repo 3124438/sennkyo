@@ -6,7 +6,9 @@
     "活動支持率": "init_support_rate",
     "SNS影響力": "init_sns_influence",
     "学校連携度": "init_school_cooperation",
-    "資金": "init_funds"
+    "資金": "init_funds",
+    "寄付金": "donation_multiplier",
+    "固定費": "fixed_cost"
   },
   "action_master": [
     {
