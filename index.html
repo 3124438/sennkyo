@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vote Rise 〜若者の一票が未来を変える〜</title>
+<style>
+  :root {
+    --bg: #0f1220;
+    --panel: #1a1f35;
+    --accent: #4f8cff;
+    --accent2: #ff6b6b;
+    --good: #4caf50;
+    --text: #eef1fb;
+    --muted: #9aa3c7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 16px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 12px; }
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  @media (min-width: 800px) {
+    .layout { grid-template-columns: 320px 1fr; }
+  }
+  .panel {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+  }
+  .stat-row span:first-child { color: var(--muted); }
+  .bar-bg {
+    background: #2a3050;
+    border-radius: 6px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .bar-fill { height: 100%; background: var(--accent); }
+  .trend-box {
+    background: #232946;
+    border-left: 4px solid var(--accent2);
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 0.9rem;
+  }
+  .action-list { display: flex; flex-direction: column; gap: 8px; }
+  .action-btn {
+    background: #232946;
+    border: 1px solid #333a5c;
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+  }
+  .action-btn:hover:not(:disabled) { border-color: var(--accent); }
+  .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .action-name { font-weight: bold; }
+  .action-desc { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+  .action-buffed { color: #ffd166; font-size: 0.78rem; }
+  #end-turn-btn {
+    margin-top: 12px;
+    width: 100%;
+    background: var(--accent);
+    border: none;
+    color: white;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  #end-turn-btn:disabled { background: #333a5c; cursor: not-allowed; }
+  #log-box {
+    height: 260px;
+    overflow-y: auto;
+    background: #10142a;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  #log-box div { margin-bottom: 4px; }
+  .status-banner {
+    padding: 14px;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 12px;
+  }
+  .status-banner.clear { background: rgba(76,175,80,0.2); border: 1px solid var(--good); }
+  .status-banner.over { background: rgba(255,107,107,0.2); border: 1px solid var(--accent2); }
+  .turn-label { font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+</style>
+</head>
+<body>
+  <h1>🗳️ Vote Rise 〜若者の一票が未来を変える〜</h1>
+  <div class="layout">
+    <div class="panel" id="stats-panel">
+      <div class="turn-label" id="turn-label">Turn -- / 60</div>
+      <div id="banner-area"></div>
+      <div id="stat-list"></div>
+      <div class="trend-box" id="trend-box">トレンド読み込み中...</div>
+    </div>
+    <div class="panel">
+      <div class="action-list" id="action-list"></div>
+      <button id="end-turn-btn">ターンを終了する</button>
+      <h3 style="margin-top:16px;">ログ</h3>
+      <div id="log-box"></div>
+    </div>
+  </div>
+
+  <script src="./game.js"></script>
+  <script>
+    const statNames = {
+      funds: "資金（円）",
+      voting_rate: "若者投票率（%）",
+      political_interest: "政治関心度",
+      support_rate: "活動支持率",
+      sns_influence: "SNS影響力",
+      school_cooperation: "学校連携度"
+    };
+
+    window.onGameStateUpdated = function (state, log, master) {
+      document.getElementById("turn-label").textContent = `Turn ${state.turn} / 60 （残り行動: ${state.actionsLeft}回）`;
+
+      // バナー
+      const bannerArea = document.getElementById("banner-area");
+      bannerArea.innerHTML = "";
+      if (state.isCleared) {
+        bannerArea.innerHTML = `<div class="status-banner clear">🎉 クリア！5年間の活動お疲れ様でした。</div>`;
+      } else if (state.isGameOver) {
+        bannerArea.innerHTML = `<div class="status-banner over">💀 ゲームオーバー：${state.gameOverReason}</div>`;
+      }
+
+      // ステータス
+      const statList = document.getElementById("stat-list");
+      statList.innerHTML = "";
+      Object.keys(statNames).forEach(key => {
+        const val = state[key];
+        const display = key === "funds" ? Math.round(val).toLocaleString() : val.toFixed(1);
+        const pct = key === "funds" ? null : Math.max(0, Math.min(100, val));
+        statList.innerHTML += `
+          <div class="stat-row"><span>${statNames[key]}</span><span>${display}</span></div>
+          ${pct !== null ? `<div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>` : `<div style="margin-bottom:12px;"></div>`}
+        `;
+      });
+
+      // トレンド
+      const trendBox = document.getElementById("trend-box");
+      if (state.currentTrend) {
+        trendBox.innerHTML = `📈 今月のトレンド: <strong>${state.currentTrend.trend_name}</strong><br>
+          <span style="color:var(--muted);font-size:0.8rem;">${state.currentTrend.description || ""}（バフ対象: ${state.currentTrend.buff_target} ×${state.currentTrend.buff_rate}）</span>`;
+      } else {
+        trendBox.textContent = "トレンドなし";
+      }
+
+      // 行動リスト
+      const actionList = document.getElementById("action-list");
+      actionList.innerHTML = "";
+      getAvailableActions().forEach(action => {
+        const buffed = state.currentTrend && state.currentTrend.buff_target === action.action_category;
+        const btn = document.createElement("button");
+        btn.className = "action-btn";
+        btn.disabled = !action._check.ok || state.isGameOver || state.isCleared;
+        btn.innerHTML = `
+          <div class="action-name">${action.action_name} ${buffed ? `<span class="action-buffed">(トレンド強化中)</span>` : ""}</div>
+          <div class="action-desc">${action.description || ""}｜コスト:${(action.cost_money||0).toLocaleString()}円</div>
+          ${!action._check.ok ? `<div class="action-desc" style="color:var(--accent2);">${action._check.reason}</div>` : ""}
+        `;
+        btn.onclick = () => {
+          const result = executeAction(action.action_id);
+          if (!result.ok) alert(result.reason);
+        };
+        actionList.appendChild(btn);
+      });
+
+      // ターン終了ボタン
+      const endBtn = document.getElementById("end-turn-btn");
+      endBtn.disabled = state.isGameOver || state.isCleared;
+      endBtn.onclick = () => endTurn();
+
+      // ログ
+      const logBox = document.getElementById("log-box");
+      logBox.innerHTML = log.map(l => `<div>${l}</div>`).join("");
+      logBox.scrollTop = logBox.scrollHeight;
+    };
+
+    initGame().catch(err => {
+      alert("データの読み込みに失敗しました: " + err.message);
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
