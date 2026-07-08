@@ -1,156 +1,109 @@
 {
   "setting": {
-    "init_voting_rate": 35,
-    "init_political_interest": 30,
-    "init_support_rate": 50,
-    "init_sns_influence": 20,
-    "init_school_cooperation": 10,
-    "init_funds": 10000000
+    "": "英語キー",
+    "若者投票率": "init_voting_rate",
+    "政治関心度": "init_political_interest",
+    "活動支持率": "init_support_rate",
+    "SNS影響力": "init_sns_influence",
+    "学校連携度": "init_school_cooperation",
+    "資金": "init_funds"
   },
   "action_master": [
     {
-      "action_id": 1,
-      "action_name": "SNSキャンペーン投稿",
-      "description": "選挙啓発コンテンツをSNSで発信する",
-      "cost_money": 50000,
-      "req_sns": 0,
-      "req_school": 0,
-      "effect_voting": 0.5,
-      "effect_interest": 1,
-      "effect_support": 0.5,
-      "effect_sns": 3,
-      "effect_school": 0,
-      "action_category": "SNS"
+      "行動ID": "action_id",
+      "行動名": "action_name",
+      "行動カテゴリ": "action_category",
+      "説明文": "description",
+      "消費資金": "cost_money",
+      "必要SNS影響力": "req_sns",
+      "必要学校連携度": "req_school",
+      "投票率変動幅": "effect_voting",
+      "関心度変動幅": "effect_interest",
+      "支持率変動幅": "effect_support",
+      "SNS影響力変動幅": "effect_sns",
+      "学校連携度変動幅": "effect_school"
     },
     {
-      "action_id": 2,
-      "action_name": "高校で模擬選挙を実施",
-      "description": "提携校で模擬選挙イベントを開催する",
-      "cost_money": 200000,
-      "req_sns": 0,
-      "req_school": 5,
-      "effect_voting": 1.5,
-      "effect_interest": 2,
-      "effect_support": 1,
-      "effect_sns": 0,
-      "effect_school": 3,
-      "action_category": "SCHOOL"
-    },
-    {
-      "action_id": 3,
-      "action_name": "地域イベントでブース出展",
-      "description": "商店街や地域祭りで啓発ブースを出す",
-      "cost_money": 150000,
-      "req_sns": 0,
-      "req_school": 0,
-      "effect_voting": 1,
-      "effect_interest": 1,
-      "effect_support": 2,
-      "effect_sns": 1,
-      "effect_school": 1,
-      "action_category": "LOCAL"
-    },
-    {
-      "action_id": 4,
-      "action_name": "企業協賛を獲得",
-      "description": "地元企業から活動資金の協賛を得る",
-      "cost_money": -500000,
-      "req_sns": 10,
-      "req_school": 0,
-      "effect_voting": 0,
-      "effect_interest": 0,
-      "effect_support": -1,
-      "effect_sns": 0,
-      "effect_school": 0,
-      "action_category": "FUNDING"
+      "行動ID": 1,
+      "行動名": "学校訪問",
+      "行動カテゴリ": "SNS",
+      "説明文": "選挙の重要性について説く",
+      "消費資金": "10万",
+      "必要SNS影響力": 20,
+      "必要学校連携度": 10,
+      "投票率変動幅": 5,
+      "関心度変動幅": 10,
+      "支持率変動幅": 5,
+      "SNS影響力変動幅": 10,
+      "学校連携度変動幅": 10
     }
   ],
   "trend_master": [
     {
-      "trend_id": 1,
-      "trend_name": "若者インフルエンサーの政治発言が話題",
-      "description": "SNS上で政治的発言をするインフルエンサーが増加中",
-      "buff_target": "SNS",
-      "buff_rate": 1.5,
-      "connected_election_id": 1
+      "トレンドID": "trend_id",
+      "イベント名": "trend_name",
+      "トレンド説明文": "description",
+      "バフ対象": "buff_target",
+      "バフ倍率": "buff_rate",
+      "連携選挙ID": "connected_election_id"
     },
     {
-      "trend_id": 2,
-      "trend_name": "主権者教育の授業が全国で拡大",
-      "description": "学校での主権者教育が注目されている",
-      "buff_target": "SCHOOL",
-      "buff_rate": 1.5,
-      "connected_election_id": 1
-    },
-    {
-      "trend_id": 3,
-      "trend_name": "地方創生ムーブメント",
-      "description": "地域コミュニティの活性化が話題に",
-      "buff_target": "LOCAL",
-      "buff_rate": 1.3,
-      "connected_election_id": 1
+      "トレンドID": 1,
+      "イベント名": "刺し身流行",
+      "トレンド説明文": "全世代で刺し身が大流行",
+      "バフ対象": "ALL",
+      "バフ倍率": 1.5,
+      "連携選挙ID": 1
     }
   ],
   "election_master": [
     {
-      "election_id": 1,
-      "threshold_voting": 45,
-      "policy_success_title": "若者政策推進法 可決",
-      "policy_success_text": "若者の声を反映した政策が推進されることになった。",
-      "buff_interest_auto": 0.5,
-      "policy_fail_title": "若者政策 見送り",
-      "policy_fail_text": "投票率不足により、若者向け政策の優先度が下げられた。",
-      "penalty_support": 5
+      "選挙ID": "election_id",
+      "発生ターン": "election_turn",
+      "成功しきい値投票率": "threshold_voting",
+      "成功時政策名": "policy_success_title",
+      "成功時説明文": "policy_success_text",
+      "成功特典": "buff_interest_auto",
+      "失敗時政策名": "policy_fail_title",
+      "失敗時説明文": "policy_fail_text",
+      "失敗ペナルティ": "penalty_support"
+    },
+    {
+      "選挙ID": 1,
+      "発生ターン": 12,
+      "成功しきい値投票率": ">40",
+      "成功時政策名": "刺し身を国民食化法",
+      "成功時説明文": "刺し身以外の食べ方を全て禁ずる",
+      "成功特典": 10,
+      "失敗時政策名": "煽り正当化法",
+      "失敗時説明文": "乙☆",
+      "失敗ペナルティ": 0
     }
   ],
   "event_master": [
     {
-      "event_id": 1,
-      "event_name": "SNSでバズる",
-      "event_text": "団体の投稿が思わぬ形で拡散され話題になった。",
-      "weight": 3,
-      "condition_param": "sns_influence",
-      "condition_value": 15,
-      "eff_money": 0,
-      "eff_voting": 0,
-      "eff_interest": 1,
-      "eff_support": 2
+      "イベントID": "event_id",
+      "イベント名": "event_name",
+      "イベントテキスト": "event_text",
+      "発生確率": "weight",
+      "発生条件パラメータ": "condition_param",
+      "条件しきい値": "condition_value",
+      "資金影響": "eff_money",
+      "投票率影響": "eff_voting",
+      "関心度影響": "eff_interest",
+      "支持率影響": "eff_support"
     },
     {
-      "event_id": 2,
-      "event_name": "炎上騒動",
-      "event_text": "活動内容が誤解を招き、批判が集まった。",
-      "weight": 2,
-      "condition_param": "",
-      "condition_value": 0,
-      "eff_money": -100000,
-      "eff_voting": 0,
-      "eff_interest": 0,
-      "eff_support": -3
-    },
-    {
-      "event_id": 3,
-      "event_name": "メディア特集",
-      "event_text": "地方新聞に活動が取り上げられた。",
-      "weight": 2,
-      "condition_param": "school_cooperation",
-      "condition_value": 15,
-      "eff_money": 50000,
-      "eff_voting": 1,
-      "eff_interest": 1,
-      "eff_support": 1
-    },
-    {
-      "event_id": 4,
-      "event_name": "特に何もない月",
-      "event_text": "静かな一ヶ月だった。",
-      "weight": 5,
-      "condition_param": "",
-      "condition_value": 0,
-      "eff_money": 0,
-      "eff_voting": 0,
-      "eff_interest": 0,
-      "eff_support": 0
+      "イベントID": 1,
+      "イベント名": "刺し身同好会",
+      "イベントテキスト": "刺し身の美味しさと今まで生きてきたことをに感謝する会",
+      "発生確率": 90,
+      "発生条件パラメータ": "support",
+      "条件しきい値": ">55(55以上にしたい)",
+      "資金影響": 1000000,
+      "投票率影響": 5,
+      "関心度影響": 5,
+      "支持率影響": 5
     }
   ]
 }
