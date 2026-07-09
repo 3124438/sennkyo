@@ -167,18 +167,34 @@ async function initGame() {
   render();
 }
 
-/** ===== マスタデータの取得（不正行を除外） ===== */
+/** ===== マスタデータの取得（不正行を除外） =====
+ * 名前が空の行に加え、主キー（IDフィールド）が数値になっていない行も除外する。
+ * これはGAS側のヘッダー行を誤って取り込んでしまった場合（例："action_id":"action_id" のような
+ * キー名そのものが値として入った行）に対する保険。
+ */
+function isFiniteNumber(v) {
+  return v !== null && v !== undefined && v !== "" && !isNaN(Number(v)) && isFinite(Number(v));
+}
+
 function getValidActions() {
-  return (master.action_master || []).filter(a => a && a.action_name);
+  return (master.action_master || []).filter(a =>
+    a && typeof a.action_name === "string" && a.action_name.trim() !== "" && isFiniteNumber(a.action_id)
+  );
 }
 function getValidTrends() {
-  return (master.trend_master || []).filter(t => t && t.trend_name);
+  return (master.trend_master || []).filter(t =>
+    t && typeof t.trend_name === "string" && t.trend_name.trim() !== "" && isFiniteNumber(t.trend_id)
+  );
 }
 function getValidElections() {
-  return (master.election_master || []).filter(e => e && e.election_id !== null && e.election_id !== undefined && e.election_id !== "");
+  return (master.election_master || []).filter(e =>
+    e && isFiniteNumber(e.election_id) && isFiniteNumber(e.election_turn)
+  );
 }
 function getValidEvents() {
-  return (master.event_master || []).filter(ev => ev && ev.event_name);
+  return (master.event_master || []).filter(ev =>
+    ev && typeof ev.event_name === "string" && ev.event_name.trim() !== "" && isFiniteNumber(ev.event_id)
+  );
 }
 
 /** ===== ターン開始処理（収入フェーズ＋トレンド発生） ===== */
