@@ -4,20 +4,6 @@
  *
  * データソース: data/game_master_data.json
  * (GASの exportDataToGitHub() が生成するファイルと同じ構造)
- *
- * ★このファイルは最終版です★
- * これまでの変更点まとめ:
- *  - cost_money 等の金額が "10万" のような日本語表記でもOK（parseMoneyValue）
- *  - threshold_voting / condition_value が ">40" のような演算子付き文字列でもOK（parseThresholdExpression）
- *  - condition_param が "support" のような略称でもOK（CONDITION_PARAM_MAP）
- *  - 選挙は「選挙」シートの election_turn 列で指定したターンのたびに発生する
- *    （年末12/24/36/48/60固定ではない）
- *  - 行動の action_category ＋ トレンドの buff_target による強化判定
- *    （buff_target が "ALL" の場合は全カテゴリの行動が強化対象になる）
- *  - 「設定」シートの donation_multiplier（寄付倍率）と fixed_cost（固定費）を
- *    ハードコードせずシートから読み込む（未設定ならデフォルト値を使用）
- *  - 「トレンド」シートの weight 列を使った重み付き抽選（未設定なら均等抽選）
- *  - 必須項目（名前など）が空のマスタ行は自動的に無視する（シートのゴミ行対策）
  */
 
 const DATA_URL = "./data/game_master_data.json";
@@ -89,7 +75,6 @@ function parseMoneyValue(raw) {
 }
 
 // ">40" "<=55" "55" "＞40" などを { operator, value } に変換する
-// 括弧内の補足メモ（例："> 55(55以上にしたい)"）は無視する
 function parseThresholdExpression(raw) {
   if (typeof raw === "number") return { operator: ">=", value: raw };
   if (raw === null || raw === undefined || raw === "") return { operator: ">=", value: 0 };
@@ -120,7 +105,7 @@ function numOr(v, fallback) {
   return typeof n === "number" && !isNaN(n) ? n : fallback;
 }
 
-// 重み付き抽選の共通処理。items は { weight } を持つオブジェクトの配列
+// 重み付き抽選の共通処理
 function weightedPick(items, weightKey = "weight", defaultWeight = 1) {
   if (items.length === 0) return null;
   const totalWeight = items.reduce((sum, it) => sum + numOr(it[weightKey], defaultWeight), 0);
@@ -149,14 +134,13 @@ async function initGame() {
     school_cooperation: numOr(s.init_school_cooperation, 10),
     actionsLeft: 3,
     currentTrend: null,
-    interestAutoBonus: 0, // 選挙成功特典の累積（毎ターン加算され続ける）
+    interestAutoBonus: 0, 
     isGameOver: false,
     isCleared: false,
     gameOverReason: null,
-    electionHistory: [] // {turn, election_id, success, votingRateAtCheck}
+    electionHistory: [] 
   };
 
-  // 設定シートから読み込む（無ければデフォルト値）
   state._donationRate = numOr(s.donation_multiplier, DEFAULT_DONATION_RATE);
   state._fixedCost = numOr(s.fixed_cost, DEFAULT_FIXED_COST);
 
@@ -167,11 +151,7 @@ async function initGame() {
   render();
 }
 
-/** ===== マスタデータの取得（不正行を除外） =====
- * 名前が空の行に加え、主キー（IDフィールド）が数値になっていない行も除外する。
- * これはGAS側のヘッダー行を誤って取り込んでしまった場合（例："action_id":"action_id" のような
- * キー名そのものが値として入った行）に対する保険。
- */
+/** ===== マスタデータの取得 ===== */
 function isFiniteNumber(v) {
   return v !== null && v !== undefined && v !== "" && !isNaN(Number(v)) && isFinite(Number(v));
 }
@@ -197,24 +177,21 @@ function getValidEvents() {
   );
 }
 
-/** ===== ターン開始処理（収入フェーズ＋トレンド発生） ===== */
+/** ===== ターン開始処理 ===== */
 function startTurn() {
   state.turn += 1;
   state.actionsLeft = 3;
 
-  // 1. 収入・維持費フェーズ
   const donation = Math.round(state.support_rate * state._donationRate);
   state.funds += donation;
   state.funds -= state._fixedCost;
   addLog(`【第${state.turn}ターン開始】寄付収入 +${donation.toLocaleString()}円 / 固定費 -${state._fixedCost.toLocaleString()}円`);
 
-  // 選挙成功特典（毎ターン関心度自動上昇）
   if (state.interestAutoBonus > 0) {
     state.political_interest += state.interestAutoBonus;
     addLog(`政策効果により関心度が自動上昇 +${state.interestAutoBonus}`);
   }
 
-  // 2. トレンド発生フェーズ（weight列があれば重み付き抽選、無ければ均等抽選）
   const trends = getValidTrends();
   state.currentTrend = weightedPick(trends);
   if (state.currentTrend) {
@@ -225,7 +202,7 @@ function startTurn() {
   checkGameOverImmediate();
 }
 
-/** ===== 行動実行（行動選択フェーズ） ===== */
+/** ===== 行動実行 ===== */
 function canExecuteAction(action) {
   if (state.isGameOver || state.isCleared) return { ok: false, reason: "ゲームは終了しています。" };
   if (state.actionsLeft <= 0) return { ok: false, reason: "このターンの行動回数を使い切っています。" };
@@ -249,7 +226,6 @@ function executeAction(actionId) {
   const check = canExecuteAction(action);
   if (!check.ok) return check;
 
-  // バフ判定：トレンドのbuff_targetと行動のaction_categoryが一致（または buff_target が "ALL"）すれば buff_rate 倍
   let multiplier = 1;
   let buffed = false;
   if (state.currentTrend) {
@@ -261,7 +237,7 @@ function executeAction(actionId) {
   }
 
   const cost = parseMoneyValue(action.cost_money);
-  state.funds -= cost; // マイナス値なら実質増加
+  state.funds -= cost; 
   state.voting_rate += numOr(action.effect_voting, 0) * multiplier;
   state.political_interest += numOr(action.effect_interest, 0) * multiplier;
   state.support_rate += numOr(action.effect_support, 0) * multiplier;
@@ -269,7 +245,7 @@ function executeAction(actionId) {
   state.school_cooperation += numOr(action.effect_school, 0) * multiplier;
 
   clampStats();
-  state.actionsLeft -= 1;
+  state.actionsLeft -= 1; // ここで残り行動回数が減る
 
   addLog(
     `行動実行: 「${action.action_name}」${buffed ? `（トレンドバフ ×${multiplier}）` : ""} ` +
@@ -277,10 +253,14 @@ function executeAction(actionId) {
   );
 
   checkGameOverImmediate();
+  
+  // 🌟【修正ポイント】行動した瞬間に画面を最新情報に更新する処理を追加！
+  render(); 
+  
   return { ok: true };
 }
 
-/** ===== イベントフェーズ（重み付き抽選） ===== */
+/** ===== イベントフェーズ ===== */
 function runEventPhase() {
   const events = getValidEvents().filter(ev => eventConditionMet(ev));
   if (events.length === 0) {
@@ -300,22 +280,18 @@ function runEventPhase() {
   checkGameOverImmediate();
 }
 
-// condition_param が空なら常に対象。指定されていればしきい値判定（演算子付き文字列対応）
 function eventConditionMet(ev) {
   if (!ev.condition_param) return true;
 
   const key = CONDITION_PARAM_MAP[String(ev.condition_param).trim()] || ev.condition_param;
   const currentValue = state[key];
-  if (typeof currentValue !== "number") return true; // 対応しないキーなら条件無視で常に対象
+  if (typeof currentValue !== "number") return true; 
 
   const { operator, value } = parseThresholdExpression(ev.condition_value);
   return compareWithOperator(currentValue, operator, value);
 }
 
-/** ===== 選挙フェーズ =====
- * 「選挙」シートの election_turn 列に指定されたターンになるたびに、
- * 該当する選挙をすべて実行する（年末固定ではない／同ターンに複数選挙も可）
- */
+/** ===== 選挙フェーズ ===== */
 function runElectionsForThisTurn() {
   const elections = getValidElections().filter(e => Number(e.election_turn) === state.turn);
   if (elections.length === 0) return;
@@ -346,7 +322,7 @@ function runElectionsForThisTurn() {
   checkGameOverImmediate();
 }
 
-/** ===== ターン終了処理（判定＋次ターンへ） ===== */
+/** ===== ターン終了処理 ===== */
 function endTurn() {
   if (state.isGameOver || state.isCleared) return;
 
@@ -404,7 +380,7 @@ function addLog(msg) {
   if (log.length > 300) log.shift();
 }
 
-/** ===== UI連携 (index.html から呼び出される想定) ===== */
+/** ===== UI連携 ===== */
 function getAvailableActions() {
   return getValidActions().map(a => ({
     ...a,
@@ -423,7 +399,6 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     initGame, executeAction, endTurn, getAvailableActions,
     state: () => state, log: () => log,
-    // テスト用に内部関数も公開
     parseMoneyValue, parseThresholdExpression, compareWithOperator
   };
 }
