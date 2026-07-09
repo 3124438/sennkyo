@@ -43,12 +43,37 @@ async function loadMasterData() {
     }
 }
 
+// 🌟 【新規追加】発生確率（重み）に基づいたランダム抽選関数
+// スプシの「発生確率」の数字が大きいほど、選ばれやすくなります。
+function selectByProbability(items, weightKey) {
+    // 全アイテムの確率の合計を計算
+    const totalWeight = items.reduce((sum, item) => {
+        // 空欄や文字が入っていた場合の保険として「10」をデフォルト値にします
+        let weight = Number(item[weightKey]);
+        if (isNaN(weight)) weight = 10;
+        return sum + weight;
+    }, 0);
+
+    // 0 〜 合計値 の間でランダムな数値を生成
+    let randomValue = Math.random() * totalWeight;
+
+    // 確率の重みに従ってアイテムを決定
+    for (let item of items) {
+        let weight = Number(item[weightKey]);
+        if (isNaN(weight)) weight = 10;
+        
+        randomValue -= weight;
+        if (randomValue <= 0) {
+            return item;
+        }
+    }
+    return items[items.length - 1]; // 念のためのフォールバック
+}
+
 function initGame() {
     gameState.turn = 1;
     gameState.actionCount = 3;
     
-    // 【重要】スプレッドシートの設定シート（s）から数値を全て読み込む！
-    // スプシのデータが空の場合は「||」の右側のデフォルト値が適用されます
     let s = masterData.setting || {};
 
     gameState.funds = Number(s["資金"]) || 10000000; 
@@ -58,7 +83,6 @@ function initGame() {
     gameState.sns_influence = Number(s["SNS影響力"]) || 20;
     gameState.school_cooperation = Number(s["学校連携度"]) || 10;
     
-    // スプシで指定した「固定費」と「寄付金倍率」を読み込み
     gameState.fixedCost = Number(s["固定費"]) || 500000;
     gameState.donationMultiplier = Number(s["寄付金倍率"]) || 5000;
     
@@ -72,17 +96,16 @@ function startTurn() {
     gameState.actionCount = 3;
     document.getElementById('end-turn-btn').disabled = true;
 
-    // 支持率の変動に合わせて毎月寄付金が変動する計算式
     let income = Math.floor(gameState.support_rate * gameState.donationMultiplier);
     let fixedCost = gameState.fixedCost;
     
     gameState.funds += (income - fixedCost);
     logMessage(`💰 今月の収支: 寄付金 +${income.toLocaleString()}円 / 固定費 -${fixedCost.toLocaleString()}円`);
 
+    // 🌟 トレンドの抽選に「発生確率」を適用
     const validTrends = masterData.trend_master.filter(t => t["トレンドID"] !== "trend_id");
     if (validTrends.length > 0) {
-        const randomIndex = Math.floor(Math.random() * validTrends.length);
-        gameState.currentTrend = validTrends[randomIndex];
+        gameState.currentTrend = selectByProbability(validTrends, "発生確率"); // D列のキー名に合わせています
         document.getElementById('trend-desc').innerHTML = `<strong>【${gameState.currentTrend["イベント名"]}】</strong> ${gameState.currentTrend["トレンド説明文"]} (バフ対象: ${gameState.currentTrend["バフ対象"]}行動が 効果 <strong>${gameState.currentTrend["バフ倍率"]}倍</strong>)`;
     }
 
@@ -177,15 +200,17 @@ function handleRandomEvent() {
     const validEvents = masterData.event_master.filter(ev => ev["イベントID"] !== "event_id");
     if (validEvents.length === 0) return;
 
-    let selectedEvent = validEvents[0];
-    if (gameState.support_rate >= 55) {
-        gameState.funds += (Number(selectedEvent["資金影響"]) || 0);
-        gameState.voting_rate += (Number(selectedEvent["投票率影響"]) || 0);
-        gameState.political_interest += (Number(selectedEvent["関心度影響"]) || 0);
-        gameState.support_rate += (Number(selectedEvent["支持率影響"]) || 0);
+    // 🌟 イベントの抽選にも「発生確率」を適用
+    // ※スプレッドシート側で「発生確率重み」としている場合は、ここを "発生確率重み" に書き換えてください
+    let selectedEvent = selectByProbability(validEvents, "発生確率");
 
-        openModal(`🎲 イベント: ${selectedEvent["イベント名"]}`, `${selectedEvent["イベントテキスト"]}`);
-    }
+    // （以前あった「支持率55以上」の縛りを消し、選ばれたら素直にパラメータ変動するように修正しました）
+    gameState.funds += (Number(selectedEvent["資金影響"]) || 0);
+    gameState.voting_rate += (Number(selectedEvent["投票率影響"]) || 0);
+    gameState.political_interest += (Number(selectedEvent["関心度影響"]) || 0);
+    gameState.support_rate += (Number(selectedEvent["支持率影響"]) || 0);
+
+    openModal(`🎲 イベント: ${selectedEvent["イベント名"]}`, `${selectedEvent["イベントテキスト"]}`);
 }
 
 function handleElection() {
@@ -193,8 +218,14 @@ function handleElection() {
     const validElections = masterData.election_master.filter(e => e["選挙ID"] !== "election_id");
     if (validElections.length === 0) return;
 
-    let election = validElections[0];
-    if (gameState.voting_rate >= 40) {
+    // 🌟 今月のトレンドに設定されている「連携選挙ID」を探して呼び出す
+    let linkedElectionId = gameState.currentTrend ? gameState.currentTrend["連携選挙ID"] : null;
+    let election = validElections.find(e => e["選挙ID"] === linkedElectionId) || validElections[0];
+
+    // 選挙のクリアしきい値もスプシから取得（デフォルトは40%）
+    let threshold = Number(election["成功しきい値投票率"]) || 40;
+
+    if (gameState.voting_rate >= threshold) {
         openModal(`🗳️ 定期選挙【成功】`, `<strong>${election["成功時政策名"]}</strong><br>${election["成功時説明文"]}`);
     } else {
         openModal(`🗳️ 定期選挙【失敗】`, `<strong>${election["失敗時政策名"]}</strong><br>${election["失敗時説明文"]}`);
