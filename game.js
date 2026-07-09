@@ -1,286 +1,413 @@
-let masterData = null;
+/**
+ * Vote Rise 〜若者の一票が未来を変える〜
+ * ゲームロジック本体（vanilla JS / no server）
+ *
+ * データソース: data/game_master_data.json
+ * (GASの exportDataToGitHub() が生成するファイルと同じ構造)
+ *
+ * ★このファイルは最終版です★
+ * これまでの変更点まとめ:
+ *  - cost_money 等の金額が "10万" のような日本語表記でもOK（parseMoneyValue）
+ *  - threshold_voting / condition_value が ">40" のような演算子付き文字列でもOK（parseThresholdExpression）
+ *  - condition_param が "support" のような略称でもOK（CONDITION_PARAM_MAP）
+ *  - 選挙は「選挙」シートの election_turn 列で指定したターンのたびに発生する
+ *    （年末12/24/36/48/60固定ではない）
+ *  - 行動の action_category ＋ トレンドの buff_target による強化判定
+ *    （buff_target が "ALL" の場合は全カテゴリの行動が強化対象になる）
+ *  - 「設定」シートの donation_multiplier（寄付倍率）と fixed_cost（固定費）を
+ *    ハードコードせずシートから読み込む（未設定ならデフォルト値を使用）
+ *  - 「トレンド」シートの weight 列を使った重み付き抽選（未設定なら均等抽選）
+ *  - 必須項目（名前など）が空のマスタ行は自動的に無視する（シートのゴミ行対策）
+ */
 
-let gameState = {
-    turn: 1,
-    actionCount: 3,
-    funds: 0,
-    voting_rate: 0,
-    political_interest: 0,
-    support_rate: 0,
-    sns_influence: 0,
-    school_cooperation: 0,
+const DATA_URL = "./data/game_master_data.json";
+const TOTAL_TURNS = 60;
+
+// 「設定」シートに donation_multiplier / fixed_cost が無い場合のデフォルト値
+const DEFAULT_DONATION_RATE = 5000; // support_rate × この値 が毎ターンの寄付収入
+const DEFAULT_FIXED_COST = 300000;  // 毎ターンの固定費
+
+const CLEAR_VOTING_RATE = 70;
+const CLEAR_INTEREST = 70;
+const GAMEOVER_SUPPORT = 20;
+
+// event_master / condition_param の略称 → 実際のstateキー のマッピング
+const CONDITION_PARAM_MAP = {
+  funds: "funds",
+  money: "funds",
+  voting: "voting_rate",
+  voting_rate: "voting_rate",
+  interest: "political_interest",
+  political_interest: "political_interest",
+  support: "support_rate",
+  support_rate: "support_rate",
+  sns: "sns_influence",
+  sns_influence: "sns_influence",
+  school: "school_cooperation",
+  school_cooperation: "school_cooperation"
+};
+
+/** ===== グローバル状態 ===== */
+let master = null; // JSONそのまま
+let state = null;  // ゲーム進行状態
+let log = [];
+
+/** ===== 数値・文字列パース系ユーティリティ ===== */
+
+// "10万" "1億2000万" "1,000,000" "50000" などを数値に変換する
+function parseMoneyValue(raw) {
+  if (typeof raw === "number") return raw;
+  if (raw === null || raw === undefined || raw === "") return 0;
+
+  let s = String(raw).trim().replace(/,/g, "").replace(/円/g, "");
+  let negative = false;
+  if (s.startsWith("-")) { negative = true; s = s.slice(1); }
+
+  let total = 0;
+  let matched = false;
+
+  const okuMatch = s.match(/(\d+(?:\.\d+)?)億/);
+  if (okuMatch) {
+    total += parseFloat(okuMatch[1]) * 100000000;
+    s = s.replace(okuMatch[0], "");
+    matched = true;
+  }
+  const manMatch = s.match(/(\d+(?:\.\d+)?)万/);
+  if (manMatch) {
+    total += parseFloat(manMatch[1]) * 10000;
+    s = s.replace(manMatch[0], "");
+    matched = true;
+  }
+  const rest = s.trim();
+  if (rest !== "" && !isNaN(rest)) {
+    total += parseFloat(rest);
+    matched = true;
+  }
+
+  if (!matched) return 0;
+  return negative ? -total : total;
+}
+
+// ">40" "<=55" "55" "＞40" などを { operator, value } に変換する
+// 括弧内の補足メモ（例："> 55(55以上にしたい)"）は無視する
+function parseThresholdExpression(raw) {
+  if (typeof raw === "number") return { operator: ">=", value: raw };
+  if (raw === null || raw === undefined || raw === "") return { operator: ">=", value: 0 };
+
+  let s = String(raw).trim()
+    .replace(/＞/g, ">").replace(/＜/g, "<").replace(/＝/g, "=")
+    .replace(/[（(].*?[）)]/g, ""); // 括弧内の補足メモを除去
+
+  const m = s.match(/^(>=|<=|>|<|=)?\s*(-?\d+(?:\.\d+)?)/);
+  if (!m) return { operator: ">=", value: 0 };
+
+  return { operator: m[1] || ">=", value: parseFloat(m[2]) };
+}
+
+function compareWithOperator(current, operator, threshold) {
+  switch (operator) {
+    case ">": return current > threshold;
+    case ">=": return current >= threshold;
+    case "<": return current < threshold;
+    case "<=": return current <= threshold;
+    case "=": return current === threshold;
+    default: return current >= threshold;
+  }
+}
+
+function numOr(v, fallback) {
+  const n = typeof v === "number" ? v : parseFloat(v);
+  return typeof n === "number" && !isNaN(n) ? n : fallback;
+}
+
+// 重み付き抽選の共通処理。items は { weight } を持つオブジェクトの配列
+function weightedPick(items, weightKey = "weight", defaultWeight = 1) {
+  if (items.length === 0) return null;
+  const totalWeight = items.reduce((sum, it) => sum + numOr(it[weightKey], defaultWeight), 0);
+  let r = Math.random() * totalWeight;
+  for (const it of items) {
+    r -= numOr(it[weightKey], defaultWeight);
+    if (r <= 0) return it;
+  }
+  return items[items.length - 1];
+}
+
+/** ===== 初期化 ===== */
+async function initGame() {
+  const res = await fetch(DATA_URL, { cache: "no-store" });
+  if (!res.ok) throw new Error("マスタデータの読み込みに失敗しました: " + res.status);
+  master = await res.json();
+
+  const s = master.setting || {};
+  state = {
+    turn: 0,
+    funds: numOr(s.init_funds, 10000000),
+    voting_rate: numOr(s.init_voting_rate, 35),
+    political_interest: numOr(s.init_political_interest, 30),
+    support_rate: numOr(s.init_support_rate, 50),
+    sns_influence: numOr(s.init_sns_influence, 20),
+    school_cooperation: numOr(s.init_school_cooperation, 10),
+    actionsLeft: 3,
     currentTrend: null,
-    autoInterestBuff: 0,
-    fixedCost: 500000,
-    donationMultiplier: 5000 
-};
+    interestAutoBonus: 0, // 選挙成功特典の累積（毎ターン加算され続ける）
+    isGameOver: false,
+    isCleared: false,
+    gameOverReason: null,
+    electionHistory: [] // {turn, election_id, success, votingRateAtCheck}
+  };
 
-window.onload = async function() {
-    const success = await loadMasterData();
-    if (success) {
-        initGame();
-    } else {
-        document.getElementById('trend-desc').innerHTML = `
-            <span style="color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; display: block; border-radius: 4px; font-weight: bold;">
-                ❌ データの読み込みに失敗しました。data/game_master_data.json を確認してください。
-            </span>`;
-    }
-};
+  // 設定シートから読み込む（無ければデフォルト値）
+  state._donationRate = numOr(s.donation_multiplier, DEFAULT_DONATION_RATE);
+  state._fixedCost = numOr(s.fixed_cost, DEFAULT_FIXED_COST);
 
-async function loadMasterData() {
-    try {
-        const response = await fetch('data/game_master_data.json');
-        if (response.ok) {
-            masterData = await response.json();
-            if (masterData && masterData.setting && masterData.action_master) {
-                return true;
-            }
-        }
-        return false;
-    } catch (e) {
-        console.error(e);
-        return false;
-    }
+  log = [];
+
+  addLog(`ゲーム開始。全${TOTAL_TURNS}ターン（5年間）。`);
+  startTurn();
+  render();
 }
 
-// 🌟 【新規追加】発生確率（重み）に基づいたランダム抽選関数
-// スプシの「発生確率」の数字が大きいほど、選ばれやすくなります。
-function selectByProbability(items, weightKey) {
-    // 全アイテムの確率の合計を計算
-    const totalWeight = items.reduce((sum, item) => {
-        // 空欄や文字が入っていた場合の保険として「10」をデフォルト値にします
-        let weight = Number(item[weightKey]);
-        if (isNaN(weight)) weight = 10;
-        return sum + weight;
-    }, 0);
-
-    // 0 〜 合計値 の間でランダムな数値を生成
-    let randomValue = Math.random() * totalWeight;
-
-    // 確率の重みに従ってアイテムを決定
-    for (let item of items) {
-        let weight = Number(item[weightKey]);
-        if (isNaN(weight)) weight = 10;
-        
-        randomValue -= weight;
-        if (randomValue <= 0) {
-            return item;
-        }
-    }
-    return items[items.length - 1]; // 念のためのフォールバック
+/** ===== マスタデータの取得（不正行を除外） ===== */
+function getValidActions() {
+  return (master.action_master || []).filter(a => a && a.action_name);
+}
+function getValidTrends() {
+  return (master.trend_master || []).filter(t => t && t.trend_name);
+}
+function getValidElections() {
+  return (master.election_master || []).filter(e => e && e.election_id !== null && e.election_id !== undefined && e.election_id !== "");
+}
+function getValidEvents() {
+  return (master.event_master || []).filter(ev => ev && ev.event_name);
 }
 
-function initGame() {
-    gameState.turn = 1;
-    gameState.actionCount = 3;
-    
-    let s = masterData.setting || {};
-
-    gameState.funds = Number(s["資金"]) || 10000000; 
-    gameState.voting_rate = Number(s["若者投票率"]) || 35;
-    gameState.political_interest = Number(s["政治関心度"]) || 30;
-    gameState.support_rate = Number(s["活動支持率"]) || 50;
-    gameState.sns_influence = Number(s["SNS影響力"]) || 20;
-    gameState.school_cooperation = Number(s["学校連携度"]) || 10;
-    
-    gameState.fixedCost = Number(s["固定費"]) || 500000;
-    gameState.donationMultiplier = Number(s["寄付金倍率"]) || 5000;
-    
-    gameState.autoInterestBuff = 0;
-
-    logMessage("🎮 スプレッドシートのデータでゲームを開始しました！");
-    startTurn();
-}
-
+/** ===== ターン開始処理（収入フェーズ＋トレンド発生） ===== */
 function startTurn() {
-    gameState.actionCount = 3;
-    document.getElementById('end-turn-btn').disabled = true;
+  state.turn += 1;
+  state.actionsLeft = 3;
 
-    let income = Math.floor(gameState.support_rate * gameState.donationMultiplier);
-    let fixedCost = gameState.fixedCost;
-    
-    gameState.funds += (income - fixedCost);
-    logMessage(`💰 今月の収支: 寄付金 +${income.toLocaleString()}円 / 固定費 -${fixedCost.toLocaleString()}円`);
+  // 1. 収入・維持費フェーズ
+  const donation = Math.round(state.support_rate * state._donationRate);
+  state.funds += donation;
+  state.funds -= state._fixedCost;
+  addLog(`【第${state.turn}ターン開始】寄付収入 +${donation.toLocaleString()}円 / 固定費 -${state._fixedCost.toLocaleString()}円`);
 
-    // 🌟 トレンドの抽選に「発生確率」を適用
-    const validTrends = masterData.trend_master.filter(t => t["トレンドID"] !== "trend_id");
-    if (validTrends.length > 0) {
-        gameState.currentTrend = selectByProbability(validTrends, "発生確率"); // D列のキー名に合わせています
-        document.getElementById('trend-desc').innerHTML = `<strong>【${gameState.currentTrend["イベント名"]}】</strong> ${gameState.currentTrend["トレンド説明文"]} (バフ対象: ${gameState.currentTrend["バフ対象"]}行動が 効果 <strong>${gameState.currentTrend["バフ倍率"]}倍</strong>)`;
-    }
+  // 選挙成功特典（毎ターン関心度自動上昇）
+  if (state.interestAutoBonus > 0) {
+    state.political_interest += state.interestAutoBonus;
+    addLog(`政策効果により関心度が自動上昇 +${state.interestAutoBonus}`);
+  }
 
-    checkGameOver();
-    createActionButtons();
-    updateUI();
+  // 2. トレンド発生フェーズ（weight列があれば重み付き抽選、無ければ均等抽選）
+  const trends = getValidTrends();
+  state.currentTrend = weightedPick(trends);
+  if (state.currentTrend) {
+    addLog(`今月のトレンド: 「${state.currentTrend.trend_name}」(${state.currentTrend.description || ""})`);
+  }
+
+  clampStats();
+  checkGameOverImmediate();
 }
 
-function createActionButtons() {
-    const grid = document.getElementById('action-grid');
-    grid.innerHTML = '';
+/** ===== 行動実行（行動選択フェーズ） ===== */
+function canExecuteAction(action) {
+  if (state.isGameOver || state.isCleared) return { ok: false, reason: "ゲームは終了しています。" };
+  if (state.actionsLeft <= 0) return { ok: false, reason: "このターンの行動回数を使い切っています。" };
+  if ((action.req_sns || 0) > state.sns_influence) {
+    return { ok: false, reason: `SNS影響力が不足しています（必要:${action.req_sns}）` };
+  }
+  if ((action.req_school || 0) > state.school_cooperation) {
+    return { ok: false, reason: `学校連携度が不足しています（必要:${action.req_school}）` };
+  }
+  const cost = parseMoneyValue(action.cost_money);
+  if (cost > 0 && state.funds < cost) {
+    return { ok: false, reason: "資金が不足しています。" };
+  }
+  return { ok: true };
+}
 
-    if (!masterData.action_master) return;
+function executeAction(actionId) {
+  const action = getValidActions().find(a => String(a.action_id) === String(actionId));
+  if (!action) return { ok: false, reason: "行動が見つかりません。" };
 
-    const actualActions = masterData.action_master.filter(act => act["行動ID"] !== "action_id");
+  const check = canExecuteAction(action);
+  if (!check.ok) return check;
 
-    actualActions.forEach(act => {
-        const name = act["行動名"] || "未定義の行動";
-        const cat = act["行動カテゴリ"] || "LOCAL";
-        const desc = act["説明文"] || "";
-        const costVal = Number(act["消費資金"]) || 0;
-        const reqSns = Number(act["必要SNS影響力"]) || 0;
-        const reqSchool = Number(act["必要学校連携度"]) || 0;
+  // バフ判定：トレンドのbuff_targetと行動のaction_categoryが一致（または buff_target が "ALL"）すれば buff_rate 倍
+  let multiplier = 1;
+  let buffed = false;
+  if (state.currentTrend) {
+    const target = state.currentTrend.buff_target;
+    if (target === "ALL" || target === action.action_category) {
+      multiplier = numOr(state.currentTrend.buff_rate, 1);
+      buffed = true;
+    }
+  }
 
-        const btn = document.createElement('button');
-        btn.className = 'action-btn';
-        
-        btn.innerHTML = `
-            <strong>${name}</strong> [${cat}]<br>
-            <span style="font-size:11px; color:#ddd;">${desc}</span>
-            <div class="action-info">消費資金: ${costVal.toLocaleString()}円 / 必要SNS: ${reqSns} / 必要学校: ${reqSchool}</div>
-        `;
+  const cost = parseMoneyValue(action.cost_money);
+  state.funds -= cost; // マイナス値なら実質増加
+  state.voting_rate += numOr(action.effect_voting, 0) * multiplier;
+  state.political_interest += numOr(action.effect_interest, 0) * multiplier;
+  state.support_rate += numOr(action.effect_support, 0) * multiplier;
+  state.sns_influence += numOr(action.effect_sns, 0) * multiplier;
+  state.school_cooperation += numOr(action.effect_school, 0) * multiplier;
 
-        const hasActions = gameState.actionCount > 0;
-        const hasMoney = costVal < 0 ? true : (gameState.funds >= costVal);
-        const hasSns = gameState.sns_influence >= reqSns;
-        const hasSchool = gameState.school_cooperation >= reqSchool;
+  clampStats();
+  state.actionsLeft -= 1;
 
-        if (!hasActions || !hasMoney || !hasSns || !hasSchool) {
-            btn.disabled = true;
-        }
+  addLog(
+    `行動実行: 「${action.action_name}」${buffed ? `（トレンドバフ ×${multiplier}）` : ""} ` +
+    `[資金${cost >= 0 ? "-" : "+"}${Math.abs(cost).toLocaleString()}円]`
+  );
 
-        btn.onclick = () => executeAction(act, costVal);
-        grid.appendChild(btn);
+  checkGameOverImmediate();
+  return { ok: true };
+}
+
+/** ===== イベントフェーズ（重み付き抽選） ===== */
+function runEventPhase() {
+  const events = getValidEvents().filter(ev => eventConditionMet(ev));
+  if (events.length === 0) {
+    addLog("特にイベントは発生しませんでした。");
+    return;
+  }
+  const chosen = weightedPick(events);
+
+  const moneyEff = parseMoneyValue(chosen.eff_money);
+  state.funds += moneyEff;
+  state.voting_rate += numOr(chosen.eff_voting, 0);
+  state.political_interest += numOr(chosen.eff_interest, 0);
+  state.support_rate += numOr(chosen.eff_support, 0);
+  clampStats();
+
+  addLog(`【イベント】${chosen.event_name}: ${chosen.event_text || ""}`);
+  checkGameOverImmediate();
+}
+
+// condition_param が空なら常に対象。指定されていればしきい値判定（演算子付き文字列対応）
+function eventConditionMet(ev) {
+  if (!ev.condition_param) return true;
+
+  const key = CONDITION_PARAM_MAP[String(ev.condition_param).trim()] || ev.condition_param;
+  const currentValue = state[key];
+  if (typeof currentValue !== "number") return true; // 対応しないキーなら条件無視で常に対象
+
+  const { operator, value } = parseThresholdExpression(ev.condition_value);
+  return compareWithOperator(currentValue, operator, value);
+}
+
+/** ===== 選挙フェーズ =====
+ * 「選挙」シートの election_turn 列に指定されたターンになるたびに、
+ * 該当する選挙をすべて実行する（年末固定ではない／同ターンに複数選挙も可）
+ */
+function runElectionsForThisTurn() {
+  const elections = getValidElections().filter(e => Number(e.election_turn) === state.turn);
+  if (elections.length === 0) return;
+
+  elections.forEach(election => {
+    const { operator, value } = parseThresholdExpression(election.threshold_voting);
+    const success = compareWithOperator(state.voting_rate, operator, value);
+
+    if (success) {
+      const bonus = numOr(election.buff_interest_auto, 0);
+      state.interestAutoBonus += bonus;
+      addLog(`【選挙結果】成功！「${election.policy_success_title}」 ${election.policy_success_text || ""}`);
+    } else {
+      const penalty = numOr(election.penalty_support, 0);
+      state.support_rate -= penalty;
+      addLog(`【選挙結果】失敗… 「${election.policy_fail_title}」 ${election.policy_fail_text || ""}`);
+    }
+
+    clampStats();
+    state.electionHistory.push({
+      turn: state.turn,
+      election_id: election.election_id,
+      success,
+      votingRateAtCheck: state.voting_rate
     });
+  });
+
+  checkGameOverImmediate();
 }
 
-function executeAction(act, costVal) {
-    if (gameState.actionCount <= 0) return;
-
-    gameState.actionCount--;
-    gameState.funds -= costVal;
-
-    let multiplier = 1.0;
-    if (gameState.currentTrend && (gameState.currentTrend["バフ対象"] === "ALL" || gameState.currentTrend["バフ対象"] === act["行動カテゴリ"])) {
-        multiplier = Number(gameState.currentTrend["バフ倍率"]) || 1.0;
-    }
-
-    gameState.voting_rate += (Number(act["投票率変動幅"]) || 0) * multiplier;
-    gameState.political_interest += (Number(act["関心度変動幅"]) || 0) * multiplier;
-    gameState.support_rate += (Number(act["支持率変動幅"]) || 0) * multiplier;
-    gameState.sns_influence += (Number(act["SNS影響力変動幅"]) || 0) * multiplier;
-    gameState.school_cooperation += (Number(act["学校連携度変動幅"]) || 0) * multiplier;
-
-    let logText = `📢 「${act["行動名"]}」を実行しました。`;
-    if (multiplier > 1.0) logText += `（トレンド効果 ${multiplier}倍🔥）`;
-    logMessage(logText);
-
-    createActionButtons();
-    updateUI();
-
-    if (gameState.actionCount === 0) {
-        document.getElementById('end-turn-btn').disabled = false;
-    }
-}
-
+/** ===== ターン終了処理（判定＋次ターンへ） ===== */
 function endTurn() {
-    handleRandomEvent();
-    if (gameState.turn % 12 === 0) {
-        handleElection();
-    }
-    if (gameState.turn >= 60) {
-        checkGameClear();
-        return;
-    }
-    gameState.turn++;
-    startTurn();
-}
+  if (state.isGameOver || state.isCleared) return;
 
-function handleRandomEvent() {
-    if (!masterData.event_master) return;
-    const validEvents = masterData.event_master.filter(ev => ev["イベントID"] !== "event_id");
-    if (validEvents.length === 0) return;
+  runEventPhase();
+  runElectionsForThisTurn();
 
-    // 🌟 イベントの抽選にも「発生確率」を適用
-    // ※スプレッドシート側で「発生確率重み」としている場合は、ここを "発生確率重み" に書き換えてください
-    let selectedEvent = selectByProbability(validEvents, "発生確率");
+  if (checkGameOverImmediate()) { render(); return; }
 
-    // （以前あった「支持率55以上」の縛りを消し、選ばれたら素直にパラメータ変動するように修正しました）
-    gameState.funds += (Number(selectedEvent["資金影響"]) || 0);
-    gameState.voting_rate += (Number(selectedEvent["投票率影響"]) || 0);
-    gameState.political_interest += (Number(selectedEvent["関心度影響"]) || 0);
-    gameState.support_rate += (Number(selectedEvent["支持率影響"]) || 0);
-
-    openModal(`🎲 イベント: ${selectedEvent["イベント名"]}`, `${selectedEvent["イベントテキスト"]}`);
-}
-
-function handleElection() {
-    if (!masterData.election_master) return;
-    const validElections = masterData.election_master.filter(e => e["選挙ID"] !== "election_id");
-    if (validElections.length === 0) return;
-
-    // 🌟 今月のトレンドに設定されている「連携選挙ID」を探して呼び出す
-    let linkedElectionId = gameState.currentTrend ? gameState.currentTrend["連携選挙ID"] : null;
-    let election = validElections.find(e => e["選挙ID"] === linkedElectionId) || validElections[0];
-
-    // 選挙のクリアしきい値もスプシから取得（デフォルトは40%）
-    let threshold = Number(election["成功しきい値投票率"]) || 40;
-
-    if (gameState.voting_rate >= threshold) {
-        openModal(`🗳️ 定期選挙【成功】`, `<strong>${election["成功時政策名"]}</strong><br>${election["成功時説明文"]}`);
+  if (state.turn >= TOTAL_TURNS) {
+    if (state.voting_rate >= CLEAR_VOTING_RATE && state.political_interest >= CLEAR_INTEREST) {
+      state.isCleared = true;
+      addLog(`🎉 クリア！投票率${state.voting_rate.toFixed(1)}% / 関心度${state.political_interest.toFixed(1)}で60ターンを終えました。`);
     } else {
-        openModal(`🗳️ 定期選挙【失敗】`, `<strong>${election["失敗時政策名"]}</strong><br>${election["失敗時説明文"]}`);
+      state.isGameOver = true;
+      state.gameOverReason = "60ターン終了時点でクリア条件未達成";
+      addLog(`ゲーム終了。クリア条件未達成（投票率${state.voting_rate.toFixed(1)}% / 関心度${state.political_interest.toFixed(1)}）`);
     }
+    render();
+    return;
+  }
+
+  startTurn();
+  render();
 }
 
-function checkGameOver() {
-    if (gameState.funds <= 0) {
-        openModal("❌ GAME OVER", "活動資金が底をつきました。", true);
-        disableAllButtons();
-    }
+/** ===== 判定系ユーティリティ ===== */
+function checkGameOverImmediate() {
+  if (state.isGameOver || state.isCleared) return true;
+  if (state.funds <= 0) {
+    state.isGameOver = true;
+    state.gameOverReason = "資金が0円以下になりました";
+    addLog("💀 ゲームオーバー：資金が尽きました。");
+    return true;
+  }
+  if (state.support_rate < GAMEOVER_SUPPORT) {
+    state.isGameOver = true;
+    state.gameOverReason = "活動支持率が20未満になりました";
+    addLog("💀 ゲームオーバー：支持率が低下しすぎました。");
+    return true;
+  }
+  return false;
 }
 
-function checkGameClear() {
-    if (gameState.voting_rate >= 70) {
-        openModal("🎉 GAME CLEAR!!", "目標達成！若者の政治参加が進みました！", true);
-    } else {
-        openModal("⏳ 任期終了", "5年間の活動が終了しました。", true);
-    }
-    disableAllButtons();
+function clampStats() {
+  state.voting_rate = clamp(state.voting_rate, 0, 100);
+  state.political_interest = clamp(state.political_interest, 0, 100);
+  state.support_rate = clamp(state.support_rate, 0, 100);
+  state.sns_influence = clamp(state.sns_influence, 0, 100);
+  state.school_cooperation = clamp(state.school_cooperation, 0, 100);
+}
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+function addLog(msg) {
+  log.push(msg);
+  if (log.length > 300) log.shift();
 }
 
-function updateUI() {
-    const year = Math.floor((gameState.turn - 1) / 12) + 1;
-    const month = ((gameState.turn - 1) % 12) + 1;
-
-    document.getElementById('stat-turn').innerText = `${gameState.turn} / 60 ヶ月 (${year}年目 ${month}ヶ月)`;
-    document.getElementById('stat-actions').innerText = `${gameState.actionCount} 回`;
-    document.getElementById('stat-funds').innerText = `${gameState.funds.toLocaleString()}円`;
-    document.getElementById('stat-voting').innerText = `${gameState.voting_rate.toFixed(1)}%`;
-    document.getElementById('stat-interest').innerText = gameState.political_interest.toFixed(1);
-    document.getElementById('stat-support').innerText = gameState.support_rate.toFixed(1);
-    document.getElementById('stat-sns').innerText = gameState.sns_influence.toFixed(1);
-    document.getElementById('stat-school').innerText = gameState.school_cooperation.toFixed(1);
-    document.getElementById('action-count-text').innerText = gameState.actionCount;
+/** ===== UI連携 (index.html から呼び出される想定) ===== */
+function getAvailableActions() {
+  return getValidActions().map(a => ({
+    ...a,
+    _check: canExecuteAction(a),
+    _costParsed: parseMoneyValue(a.cost_money)
+  }));
 }
 
-function logMessage(msg) {
-    const logBox = document.getElementById('log-box');
-    const entry = document.createElement('div');
-    entry.className = 'log-entry';
-    entry.innerText = `[${gameState.turn}ヶ月目] ${msg}`;
-    logBox.appendChild(entry);
-    logBox.scrollTop = logBox.scrollHeight;
+function render() {
+  if (typeof window !== "undefined" && typeof window.onGameStateUpdated === "function") {
+    window.onGameStateUpdated(state, log, master);
+  }
 }
 
-function disableAllButtons() {
-    document.querySelectorAll('button:not(.modal-btn)').forEach(b => b.disabled = true);
-}
-
-function openModal(title, body) {
-    document.getElementById('modal-title').innerText = title;
-    document.getElementById('modal-body').innerHTML = body;
-    document.getElementById('game-modal').style.display = 'flex';
-}
-function closeModal() {
-    document.getElementById('game-modal').style.display = 'none';
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    initGame, executeAction, endTurn, getAvailableActions,
+    state: () => state, log: () => log,
+    // テスト用に内部関数も公開
+    parseMoneyValue, parseThresholdExpression, compareWithOperator
+  };
 }
