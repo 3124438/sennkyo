@@ -1,113 +1,66 @@
 {
   "setting": {
-    "": "英語キー",
-    "若者投票率": "init_voting_rate",
-    "政治関心度": "init_political_interest",
-    "活動支持率": "init_support_rate",
-    "SNS影響力": "init_sns_influence",
-    "学校連携度": "init_school_cooperation",
-    "資金": "init_funds",
-    "寄付金倍率": "donation_multiplier",
-    "固定費": "fixed_cost"
+    "init_voting_rate": 35,
+    "init_political_interest": 30,
+    "init_support_rate": 50,
+    "init_sns_influence": 20,
+    "init_school_cooperation": 10,
+    "init_funds": 10000000,
+    "donation_multiplier": 1000000,
+    "fixed_cost": 50000
   },
   "action_master": [
     {
-      "行動ID": "action_id",
-      "行動名": "action_name",
-      "行動カテゴリ": "action_category",
-      "説明文": "description",
-      "消費資金": "cost_money",
-      "必要SNS影響力": "req_sns",
-      "必要学校連携度": "req_school",
-      "投票率変動幅": "effect_voting",
-      "関心度変動幅": "effect_interest",
-      "支持率変動幅": "effect_support",
-      "SNS影響力変動幅": "effect_sns",
-      "学校連携度変動幅": "effect_school"
-    },
-    {
-      "行動ID": 1,
-      "行動名": "YouTubeで動画公開",
-      "行動カテゴリ": "SNS",
-      "説明文": "選挙の重要性を説く",
-      "消費資金": 100000,
-      "必要SNS影響力": 20,
-      "必要学校連携度": 10,
-      "投票率変動幅": 5,
-      "関心度変動幅": 10,
-      "支持率変動幅": 5,
-      "SNS影響力変動幅": 10,
-      "学校連携度変動幅": 10
+      "action_id": 1,
+      "action_name": "YouTubeで動画公開",
+      "action_category": "SNS",
+      "description": "選挙の重要性を説く",
+      "cost_money": 100000,
+      "req_sns": 20,
+      "req_school": 10,
+      "effect_voting": 5,
+      "effect_interest": 10,
+      "effect_support": 5,
+      "effect_sns": 10,
+      "effect_school": 10
     }
   ],
   "trend_master": [
     {
-      "トレンドID": "trend_id",
-      "イベント名": "trend_name",
-      "トレンド説明文": "description",
-      "発生確率": "weight",
-      "バフ対象": "buff_target",
-      "バフ倍率": "buff_rate",
-      "連携選挙ID": "connected_election_id"
-    },
-    {
-      "トレンドID": 1,
-      "イベント名": "選挙流行",
-      "トレンド説明文": "選挙に向き合う傾向が出る",
-      "発生確率": 90,
-      "バフ対象": "ALL",
-      "バフ倍率": 1.5,
-      "連携選挙ID": 1
+      "trend_id": 1,
+      "trend_name": "選挙流行",
+      "description": "選挙に向き合う傾向が出る",
+      "weight": 90,
+      "buff_target": "ALL",
+      "buff_rate": 1.5,
+      "connected_election_id": 1
     }
   ],
   "election_master": [
     {
-      "選挙ID": "election_id",
-      "発生ターン": "election_turn",
-      "成功しきい値投票率": "threshold_voting",
-      "成功時政策名": "policy_success_title",
-      "成功時説明文": "policy_success_text",
-      "成功特典": "buff_interest_auto",
-      "失敗時政策名": "policy_fail_title",
-      "失敗時説明文": "policy_fail_text",
-      "失敗ペナルティ": "penalty_support"
-    },
-    {
-      "選挙ID": 1,
-      "発生ターン": 12,
-      "成功しきい値投票率": ">40",
-      "成功時政策名": "税金1年廃止",
-      "成功時説明文": "税金がなくなる☆",
-      "成功特典": 10,
-      "失敗時政策名": "煽り正当化法",
-      "失敗時説明文": "乙☆",
-      "失敗ペナルティ": 0
+      "election_id": 1,
+      "election_turn": 12,
+      "threshold_voting": ">40",
+      "policy_success_title": "税金1年廃止",
+      "policy_success_text": "税金がなくなる☆",
+      "buff_interest_auto": 10,
+      "policy_fail_title": "煽り正当化法",
+      "policy_fail_text": "乙☆",
+      "penalty_support": 0
     }
   ],
   "event_master": [
     {
-      "イベントID": "event_id",
-      "イベント名": "event_name",
-      "イベントテキスト": "event_text",
-      "発生確率": "weight",
-      "発生条件パラメータ": "condition_param",
-      "条件しきい値": "condition_value",
-      "資金影響": "eff_money",
-      "投票率影響": "eff_voting",
-      "関心度影響": "eff_interest",
-      "支持率影響": "eff_support"
-    },
-    {
-      "イベントID": 1,
-      "イベント名": "増税メガネが流行る",
-      "イベントテキスト": "特に悪意はない",
-      "発生確率": 90,
-      "発生条件パラメータ": "support",
-      "条件しきい値": ">55",
-      "資金影響": 1000000,
-      "投票率影響": 5,
-      "関心度影響": 5,
-      "支持率影響": 5
+      "event_id": 1,
+      "event_name": "増税メガネが流行る",
+      "event_text": "特に悪意はない",
+      "weight": 90,
+      "condition_param": "support",
+      "condition_value": ">55",
+      "eff_money": 1000000,
+      "eff_voting": 5,
+      "eff_interest": 5,
+      "eff_support": 5
     }
   ]
 }
